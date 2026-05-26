@@ -3,7 +3,10 @@ import re
 import json
 import uuid
 import requests
-from flask import Flask, render_template, request, session, redirect, url_for
+from flask import Flask, render_template, request, session, redirect, url_for, send_from_directory
+from pptx import Presentation
+from pptx.util import Inches, Pt
+from pptx.enum.text import PP_ALIGN
 
 app = Flask(__name__)
 app.config['OUTPUT_FOLDER'] = os.path.join(os.path.dirname(__file__), 'output')
@@ -74,6 +77,87 @@ def generate_outline(topic, description=''):
     raise ValueError(f'无法解析 AI 输出: {content[:200]}...' if len(content) > 200 else f'无法解析 AI 输出: {content}')
 
 
+def generate_slides_content(session_data):
+    api_key = load_api_key()
+    topic = session_data['topic']
+    description = session_data.get('description', '')
+    outline = session_data['outline']
+
+    prompt = f"""你是一个 PPT 内容助手。根据大纲为每一页生成详细内容。
+
+主题：{topic}
+补充说明：{description}
+
+大纲：
+{json.dumps(outline, ensure_ascii=False)}
+
+请为每一页生成以下内容（返回 JSON 数组）：
+- title: 标题
+- bullets: 要点数组（3-5个）
+- notes: 演讲备注（可选）
+
+用中文回复，只返回 JSON 格式，不要任何解释"""
+
+    response = requests.post(
+        'https://api.minimaxi.com/anthropic/v1/messages',
+        headers={
+            'Authorization': f'Bearer {api_key}',
+            'Content-Type': 'application/json'
+        },
+        json={
+            'model': 'MiniMax-M2.1',
+            'max_tokens': 4000,
+            'messages': [{'role': 'user', 'content': prompt}]
+        },
+        timeout=90
+    )
+
+    if response.status_code != 200:
+        raise ValueError(f'API 请求失败: {response.status_code}')
+
+    result = response.json()
+    content = result.get('content', [{}])[0].get('text', '')
+
+    json_match = re.search(r'\[[\s\S]*\]', content)
+    if json_match:
+        return json.loads(json_match.group())
+    raise ValueError(f'无法解析 AI 输出: {content[:200]}...' if len(content) > 200 else f'无法解析 AI 输出: {content}')
+
+
+def create_pptx(slides_data, output_path):
+    prs = Presentation()
+    prs.slide_width = Inches(10)
+    prs.slide_height = Inches(7.5)
+
+    for slide_data in slides_data:
+        slide = prs.slides.add_slide(prs.slide_layouts[6])
+        shapes = slide.shapes
+
+        title_box = shapes.add_textbox(Inches(1), Inches(0.5), Inches(8), Inches(1))
+        tf = title_box.text_frame
+        p = tf.paragraphs[0]
+        p.text = slide_data.get('title', '')
+        p.font.size = Pt(36)
+        p.font.bold = True
+        p.alignment = PP_ALIGN.CENTER
+
+        content_box = shapes.add_textbox(Inches(1), Inches(2), Inches(8), Inches(4))
+        tf = content_box.text_frame
+        tf.word_wrap = True
+
+        bullets = slide_data.get('bullets', [])
+        for i, bullet in enumerate(bullets):
+            if i == 0:
+                p = tf.paragraphs[0]
+            else:
+                p = tf.add_paragraph()
+            p.text = f'• {bullet}'
+            p.font.size = Pt(24)
+            p.space_before = Pt(12)
+
+    prs.save(output_path)
+
+
 @app.route('/')
 def index():
     return render_template('index.html')
@@ -104,6 +188,37 @@ def generate():
                          description=description, session_id=session_id)
     except Exception as e:
         return render_template('index.html', error=f'生成失败: {str(e)}', topic=topic, description=description)
+
+
+@app.route('/create', methods=['POST'])
+def create():
+    session_id = request.form.get('session_id', '')
+
+    if not session_id:
+        return render_template('index.html', error='无效的会话')
+
+    session_file = os.path.join(app.config['SESSION_DATA_DIR'], f'{session_id}.json')
+    if not os.path.exists(session_file):
+        return render_template('index.html', error='会话已过期，请重新输入')
+
+    with open(session_file, 'r') as f:
+        session_data = json.load(f)
+
+    try:
+        slides_content = generate_slides_content(session_data)
+
+        output_file = f'{session_id}.pptx'
+        output_path = os.path.join(app.config['OUTPUT_FOLDER'], output_file)
+        create_pptx(slides_content, output_path)
+
+        return render_template('download.html', filename=output_file)
+    except Exception as e:
+        return render_template('index.html', error=f'生成失败: {str(e)}')
+
+
+@app.route('/download/<path:filename>')
+def download(filename):
+    return send_from_directory(app.config['OUTPUT_FOLDER'], filename, as_attachment=True)
 
 
 if __name__ == '__main__':
