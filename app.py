@@ -252,6 +252,35 @@ def create():
         return render_template('index.html', error=f'生成失败: {str(e)}')
 
 
+@app.route('/create-pptx', methods=['POST'])
+def create_pptx():
+    session_id = request.form.get('session_id', '')
+
+    if not session_id:
+        return render_template('index.html', error='无效的会话')
+
+    session_file = os.path.join(app.config['SESSION_DATA_DIR'], f'{session_id}.json')
+    if not os.path.exists(session_file):
+        return render_template('index.html', error='会话已过期，请重新输入')
+
+    with open(session_file, 'r') as f:
+        session_data = json.load(f)
+
+    try:
+        slides_content = generate_slides_content(session_data)
+
+        if not isinstance(slides_content, list):
+            raise ValueError('生成的幻灯片内容格式不正确')
+
+        output_file = f'{session_id}.pptx'
+        output_path = os.path.join(app.config['OUTPUT_FOLDER'], output_file)
+        create_pptx(slides_content, output_path)
+
+        return render_template('download.html', filename=output_file)
+    except Exception as e:
+        return render_template('index.html', error=f'生成失败: {str(e)}')
+
+
 @app.route('/download/<path:filename>')
 def download(filename):
     return send_from_directory(app.config['OUTPUT_FOLDER'], filename, as_attachment=True)

@@ -8,24 +8,27 @@
 <body>
   <div class="container">
     <h1>确认大纲</h1>
+
+    <h2>{{ outline.title }}</h2>
     <p><strong>主题：</strong>{{ topic }}</p>
 
     {% if description %}
     <p><strong>补充说明：</strong>{{ description }}</p>
     {% endif %}
 
-    <h2>大纲内容（共 {{ outline.slides|length }} 页）</h2>
+    <h2>幻灯片 ({{ outline.slides|length }} 页)</h2>
+    <ul>
     {% for slide in outline.slides %}
-    <div class="slide-preview">
-      <strong>第 {{ slide.page }} 页：{{ slide.title }}</strong>
-    </div>
+      <li><strong>第 {{ slide.page }} 页：</strong>{{ slide.title }}</li>
     {% endfor %}
+    </ul>
 
-    <form method="post" action="/create">
+    <form method="post" action="/create-pptx">
       <input type="hidden" name="session_id" value="{{ session_id }}">
-      <button type="submit">确认并生成 PPT</button>
+      <button type="submit">确认生成 PPTX</button>
     </form>
-    <p><a href="/">重新输入</a></p>
+
+    <p><a href="/"><button>重新生成</button></a></p>
   </div>
 </body>
 </html>
