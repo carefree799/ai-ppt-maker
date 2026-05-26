@@ -62,8 +62,11 @@ def call_minimax_api(prompt, max_tokens=2000):
     except json.JSONDecodeError:
         raise ValueError('API 返回非 JSON 格式')
 
-    content = result.get('content', [{}])[0].get('text', '')
-    return content
+    content = result.get('content', [])
+    for item in content:
+        if item.get('type') == 'text':
+            return item.get('text', '')
+    return ''
 
 
 def generate_outline(topic, description=''):
@@ -253,7 +256,7 @@ def create():
 
 
 @app.route('/create-pptx', methods=['POST'])
-def create_pptx():
+def generate_pptx():
     session_id = request.form.get('session_id', '')
 
     if not session_id:
