@@ -25,36 +25,22 @@ def load_api_key():
     return settings.get('ANTHROPIC_API_KEY', '')
 
 
-def generate_outline(topic, description=''):
+def call_minimax_api(prompt, max_tokens=2000):
+    """调用 MiniMax API"""
     api_key = load_api_key()
     if not api_key:
         raise ValueError('API Key 未配置，请在 settings.json 中设置 ANTHROPIC_API_KEY')
-
-    prompt = f"""你是一个 PPT 结构助手。根据用户的主题生成一个 PPT 大纲。
-
-主题：{topic}
-补充说明：{description}
-
-请以 JSON 格式返回大纲，必须包含以下字段：
-- title: PPT 标题
-- slides: 数组，每页包含 page(页码，从1开始) 和 title(标题)
-
-要求：
-- 5-10 页为宜
-- 逻辑清晰，符合主题
-- 用中文回复
-- 只返回 JSON，不要任何解释"""
 
     try:
         response = requests.post(
             'https://api.minimaxi.com/anthropic/v1/messages',
             headers={
-                'Authorization': f'Bearer {api_key}',
+                'X-Api-Key': api_key,
                 'Content-Type': 'application/json'
             },
             json={
                 'model': 'MiniMax-M2.1',
-                'max_tokens': 2000,
+                'max_tokens': max_tokens,
                 'messages': [{'role': 'user', 'content': prompt}]
             },
             timeout=60
@@ -77,6 +63,26 @@ def generate_outline(topic, description=''):
         raise ValueError('API 返回非 JSON 格式')
 
     content = result.get('content', [{}])[0].get('text', '')
+    return content
+
+
+def generate_outline(topic, description=''):
+    prompt = f"""你是一个 PPT 结构助手。根据用户的主题生成一个 PPT 大纲。
+
+主题：{topic}
+补充说明：{description}
+
+请以 JSON 格式返回大纲，必须包含以下字段：
+- title: PPT 标题
+- slides: 数组，每页包含 page(页码，从1开始) 和 title(标题)
+
+要求：
+- 5-10 页为宜
+- 逻辑清晰，符合主题
+- 用中文回复
+- 只返回 JSON，不要任何解释"""
+
+    content = call_minimax_api(prompt, max_tokens=2000)
 
     json_match = re.search(r'\{[\s\S]*\}', content)
     if json_match:
@@ -94,7 +100,6 @@ def generate_outline(topic, description=''):
 
 
 def generate_slides_content(session_data):
-    api_key = load_api_key()
     topic = session_data['topic']
     description = session_data.get('description', '')
     outline = session_data['outline']
@@ -114,38 +119,7 @@ def generate_slides_content(session_data):
 
 用中文回复，只返回 JSON 格式，不要任何解释"""
 
-    try:
-        response = requests.post(
-            'https://api.minimaxi.com/anthropic/v1/messages',
-            headers={
-                'Authorization': f'Bearer {api_key}',
-                'Content-Type': 'application/json'
-            },
-            json={
-                'model': 'MiniMax-M2.1',
-                'max_tokens': 4000,
-                'messages': [{'role': 'user', 'content': prompt}]
-            },
-            timeout=90
-        )
-    except requests.exceptions.Timeout:
-        raise ValueError('API 请求超时，请重试')
-    except requests.exceptions.RequestException as e:
-        raise ValueError(f'API 请求失败: {str(e)}')
-
-    if response.status_code != 200:
-        try:
-            error_msg = response.json().get('error', {}).get('message', '') or response.text
-        except:
-            error_msg = response.text
-        raise ValueError(f'API 错误 ({response.status_code}): {error_msg[:100]}')
-
-    try:
-        result = response.json()
-    except json.JSONDecodeError:
-        raise ValueError('API 返回非 JSON 格式')
-
-    content = result.get('content', [{}])[0].get('text', '')
+    content = call_minimax_api(prompt, max_tokens=4000)
 
     json_match = re.search(r'\[[\s\S]*\]', content)
     if json_match:
