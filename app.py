@@ -45,35 +45,51 @@ def generate_outline(topic, description=''):
 - 用中文回复
 - 只返回 JSON，不要任何解释"""
 
-    response = requests.post(
-        'https://api.minimaxi.com/anthropic/v1/messages',
-        headers={
-            'Authorization': f'Bearer {api_key}',
-            'Content-Type': 'application/json'
-        },
-        json={
-            'model': 'MiniMax-M2.1',
-            'max_tokens': 2000,
-            'messages': [{'role': 'user', 'content': prompt}]
-        },
-        timeout=60
-    )
+    try:
+        response = requests.post(
+            'https://api.minimaxi.com/anthropic/v1/messages',
+            headers={
+                'Authorization': f'Bearer {api_key}',
+                'Content-Type': 'application/json'
+            },
+            json={
+                'model': 'MiniMax-M2.1',
+                'max_tokens': 2000,
+                'messages': [{'role': 'user', 'content': prompt}]
+            },
+            timeout=60
+        )
+    except requests.exceptions.Timeout:
+        raise ValueError('API 请求超时，请重试')
+    except requests.exceptions.RequestException as e:
+        raise ValueError(f'API 请求失败: {str(e)}')
 
     if response.status_code != 200:
-        raise ValueError(f'API 请求失败: {response.status_code}')
+        try:
+            error_msg = response.json().get('error', {}).get('message', '') or response.text
+        except:
+            error_msg = response.text
+        raise ValueError(f'API 错误 ({response.status_code}): {error_msg[:100]}')
 
-    result = response.json()
+    try:
+        result = response.json()
+    except json.JSONDecodeError:
+        raise ValueError('API 返回非 JSON 格式')
+
     content = result.get('content', [{}])[0].get('text', '')
 
     json_match = re.search(r'\{[\s\S]*\}', content)
     if json_match:
-        outline = json.loads(json_match.group())
+        try:
+            outline = json.loads(json_match.group())
 
-        if 'slides' in outline and isinstance(outline['slides'], list):
-            for i, slide in enumerate(outline['slides']):
-                slide['page'] = i + 1
+            if 'slides' in outline and isinstance(outline['slides'], list):
+                for i, slide in enumerate(outline['slides']):
+                    slide['page'] = i + 1
 
-        return outline
+            return outline
+        except json.JSONDecodeError:
+            raise ValueError(f'无法解析 AI 输出的 JSON')
     raise ValueError(f'无法解析 AI 输出: {content[:200]}...' if len(content) > 200 else f'无法解析 AI 输出: {content}')
 
 
@@ -98,29 +114,46 @@ def generate_slides_content(session_data):
 
 用中文回复，只返回 JSON 格式，不要任何解释"""
 
-    response = requests.post(
-        'https://api.minimaxi.com/anthropic/v1/messages',
-        headers={
-            'Authorization': f'Bearer {api_key}',
-            'Content-Type': 'application/json'
-        },
-        json={
-            'model': 'MiniMax-M2.1',
-            'max_tokens': 4000,
-            'messages': [{'role': 'user', 'content': prompt}]
-        },
-        timeout=90
-    )
+    try:
+        response = requests.post(
+            'https://api.minimaxi.com/anthropic/v1/messages',
+            headers={
+                'Authorization': f'Bearer {api_key}',
+                'Content-Type': 'application/json'
+            },
+            json={
+                'model': 'MiniMax-M2.1',
+                'max_tokens': 4000,
+                'messages': [{'role': 'user', 'content': prompt}]
+            },
+            timeout=90
+        )
+    except requests.exceptions.Timeout:
+        raise ValueError('API 请求超时，请重试')
+    except requests.exceptions.RequestException as e:
+        raise ValueError(f'API 请求失败: {str(e)}')
 
     if response.status_code != 200:
-        raise ValueError(f'API 请求失败: {response.status_code}')
+        try:
+            error_msg = response.json().get('error', {}).get('message', '') or response.text
+        except:
+            error_msg = response.text
+        raise ValueError(f'API 错误 ({response.status_code}): {error_msg[:100]}')
 
-    result = response.json()
+    try:
+        result = response.json()
+    except json.JSONDecodeError:
+        raise ValueError('API 返回非 JSON 格式')
+
     content = result.get('content', [{}])[0].get('text', '')
 
     json_match = re.search(r'\[[\s\S]*\]', content)
     if json_match:
-        return json.loads(json_match.group())
+        try:
+            return json.loads(json_match.group())
+        except json.JSONDecodeError:
+            raise ValueError(f'无法解析 AI 输出的 JSON')
+    raise ValueError(f'无法解析 AI 输出: {content[:200]}...' if len(content) > 200 else f'无法解析 AI 输出: {content}')
     raise ValueError(f'无法解析 AI 输出: {content[:200]}...' if len(content) > 200 else f'无法解析 AI 输出: {content}')
 
 
@@ -206,6 +239,9 @@ def create():
 
     try:
         slides_content = generate_slides_content(session_data)
+
+        if not isinstance(slides_content, list):
+            raise ValueError('生成的幻灯片内容格式不正确')
 
         output_file = f'{session_id}.pptx'
         output_path = os.path.join(app.config['OUTPUT_FOLDER'], output_file)
