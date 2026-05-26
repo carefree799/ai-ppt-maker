@@ -1,0 +1,30 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+  <title>AI PPT Maker</title>
+  <link rel="stylesheet" href="/static/style.css">
+</head>
+<body>
+  <div class="container">
+    <h1>AI PPT Maker</h1>
+    <p>输入主题，快速生成专业 PPT</p>
+
+    {% if error %}
+    <p class="error">{{ error }}</p>
+    {% endif %}
+
+    <form method="post" action="/generate">
+      <label for="topic">主题 *</label>
+      <input type="text" id="topic" name="topic" required
+             placeholder="例如：介绍我们的新产品" value="{{ topic|default('') }}">
+
+      <label for="description">补充说明（可选）</label>
+      <textarea id="description" name="description" rows="4"
+                placeholder="任何特殊要求，比如时长、受众、场景等">{{ description|default('') }}</textarea>
+
+      <button type="submit">生成大纲</button>
+    </form>
+  </div>
+</body>
+</html>
