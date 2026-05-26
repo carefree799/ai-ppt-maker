@@ -19,6 +19,11 @@ os.makedirs(app.config['SESSION_DATA_DIR'], exist_ok=True)
 
 
 def load_api_key():
+    # 先从环境变量读取，没有则从 settings.json 读取
+    api_key = os.environ.get('ANTHROPIC_API_KEY', '')
+    if api_key:
+        return api_key
+
     settings_path = os.path.join(os.path.dirname(__file__), 'settings.json')
     with open(settings_path, 'r') as f:
         settings = json.load(f)
