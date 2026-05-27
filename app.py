@@ -4,9 +4,6 @@ import json
 import uuid
 import requests
 from flask import Flask, render_template, request, session, redirect, url_for, send_from_directory
-from pptx import Presentation
-from pptx.util import Inches, Pt
-from pptx.enum.text import PP_ALIGN
 
 app = Flask(__name__)
 app.config['OUTPUT_FOLDER'] = os.path.join(os.path.dirname(__file__), 'static')
@@ -143,64 +140,13 @@ def generate_slides_content(session_data):
 
 
 def create_pptx(slides_data, output_path):
-    prs = Presentation()
-    prs.slide_width = Inches(10)
-    prs.slide_height = Inches(7.5)
+    """使用专业级渲染器创建 PPT"""
+    from ppt_renderer import render_pptx
 
     if not slides_data:
         raise ValueError('没有幻灯片内容')
 
-    first_slide = slides_data[0]
-    title = first_slide.get('title', '')
-
-    title_slide = prs.slides.add_slide(prs.slide_layouts[6])
-    shapes = title_slide.shapes
-
-    main_title_box = shapes.add_textbox(Inches(1), Inches(2.5), Inches(8), Inches(1.5))
-    tf = main_title_box.text_frame
-    p = tf.paragraphs[0]
-    p.text = title
-    p.font.size = Pt(44)
-    p.font.bold = True
-    p.alignment = PP_ALIGN.CENTER
-
-    subtitle_box = shapes.add_textbox(Inches(1), Inches(4), Inches(8), Inches(0.8))
-    tf = subtitle_box.text_frame
-    p = tf.paragraphs[0]
-    p.text = 'AI 自动生成'
-    p.font.size = Pt(24)
-    p.alignment = PP_ALIGN.CENTER
-
-    for slide_data in slides_data[1:]:
-        slide = prs.slides.add_slide(prs.slide_layouts[6])
-        shapes = slide.shapes
-
-        title_box = shapes.add_textbox(Inches(0.5), Inches(0.5), Inches(9), Inches(0.8))
-        tf = title_box.text_frame
-        p = tf.paragraphs[0]
-        p.text = slide_data.get('title', '')
-        p.font.size = Pt(24)
-        p.font.bold = True
-        p.alignment = PP_ALIGN.CENTER
-
-        content_box = shapes.add_textbox(Inches(0.8), Inches(1.8), Inches(8.4), Inches(5))
-        tf = content_box.text_frame
-        tf.word_wrap = True
-
-        bullets = slide_data.get('bullets', [])
-        if not bullets:
-            continue
-
-        for i, bullet in enumerate(bullets):
-            if i == 0:
-                p = tf.paragraphs[0]
-            else:
-                p = tf.add_paragraph()
-            p.text = f'• {bullet}'
-            p.font.size = Pt(18)
-            p.space_before = Pt(10)
-
-    prs.save(output_path)
+    return render_pptx(slides_data, output_path)
 
 
 @app.route('/')
