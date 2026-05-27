@@ -120,9 +120,13 @@ def generate_slides_content(session_data):
 大纲：
 {json.dumps(outline, ensure_ascii=False)}
 
-请为每一页生成以下内容（返回 JSON 数组）：
+请为每一页生成以下内容（返回 JSON 数组，必须包含以下字段）：
 - title: 标题
 - bullets: 要点数组（3-5个）
+- layout: 布局类型，可选值：title_slide(封面)、single_column(单栏)、two_column(双栏对比)、comparison(左右对比)、chart(图表页)
+- theme: 主题色彩，可选值：blue(蓝色)、green(绿色)、purple(紫色)、gray(灰色)，第一页用 blue，其他随机或与主题匹配
+- chart_type: 如果 layout 是 chart，可选 bar、pie、line
+- chart_data: 如果有图表，格式如 {{"labels":["A","B"],"values":[10,20]}}
 - notes: 演讲备注（可选）
 
 用中文回复，只返回 JSON 格式，不要任何解释"""
